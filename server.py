@@ -23,7 +23,7 @@ def chat():
         ],
         temperature=1,
         top_p=0.95,
-        max_tokens=16384,
+        max_tokens=2048,
         seed=42,
         extra_body={
             "chat_template_kwargs": {
