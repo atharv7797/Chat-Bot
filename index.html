@@ -161,10 +161,24 @@
   }
 
   .msg{
-    display:flex;
-    gap:12px;
-    max-width:100%;
-  }
+  display:flex;
+  gap:12px;
+  max-width:100%;
+}
+
+.msg.assistant{
+  flex-wrap:wrap;
+}
+
+.msg.assistant .bubble{
+  flex:1;
+  min-width:0;
+}
+
+.msg.assistant .response-copy-btn{
+  margin-left:38px;
+  margin-top:-8px;
+}
   .msg .avatar{
     flex:none;
     width:26px;height:26px;
@@ -203,23 +217,93 @@
   color:#ffffff;
 }
 
-.msg.assistant .bubble em{
-  font-style:italic;
+
+
+.msg.assistant .bubble em {
+  font-style: italic;
 }
 
-.msg.assistant .bubble code{
-  font-family:monospace;
-  background:rgba(255,255,255,.10);
-  padding:2px 5px;
-  border-radius:5px;
-  font-size:.9em;
+.msg.assistant .bubble code {
+  font-family: monospace;
+  background: rgba(255,255,255,.10);
+  padding: 2px 5px;
+  border-radius: 5px;
+  font-size: .9em;
 }
-  .msg.user .bubble{
-    background:var(--user-bubble);
-    color:#f2f2f3;
-    border-top-right-radius:5px;
-  }
 
+.msg.assistant .bubble pre {
+  margin: 12px 0;
+  padding: 14px;
+  overflow-x: auto;
+  border-radius: 10px;
+  background: rgba(0,0,0,.35);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+.msg.assistant .bubble pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.msg.assistant .bubble ul,
+.msg.assistant .bubble ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.msg.assistant .bubble li {
+  margin: 4px 0;
+}
+
+.msg.assistant .bubble p {
+  margin: 8px 0;
+}
+
+.msg.assistant .bubble p:first-child {
+  margin-top: 0;
+}
+
+.msg.assistant .bubble p:last-child {
+  margin-bottom: 0;
+}
+/* ---------- copy buttons ---------- */
+
+.response-copy-btn,
+.code-copy-btn{
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.06);
+  color:#aaa;
+  font-size:11px;
+  padding:4px 9px;
+  border-radius:6px;
+  cursor:pointer;
+  transition:background .2s ease, color .2s ease;
+}
+
+.response-copy-btn{
+  margin-top:6px;
+  align-self:flex-start;
+}
+
+.response-copy-btn:hover,
+.code-copy-btn:hover{
+  background:rgba(255,255,255,.12);
+  color:#fff;
+}
+
+.code-copy-btn{
+  position:absolute;
+  top:8px;
+  right:8px;
+}
+
+.msg.assistant .bubble pre{
+  position:relative;
+  padding-top:38px;
+}
   .typing{
     display:flex;
     gap:4px;
@@ -447,7 +531,8 @@
   </div>
 
 </div>
-
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script>
 (function(){
   // teardown entrance animation once it's done (or after a timeout fallback)
@@ -495,14 +580,50 @@
       ? '<svg viewBox="0 0 24 24" fill="none"><path d="M12 2l1.8 5.6L19 9l-5.2 1.4L12 16l-1.8-5.6L5 9l5.2-1.4L12 2z" fill="white"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" fill="#c9c9cc"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7" stroke="#c9c9cc" stroke-width="1.6" stroke-linecap="round"/></svg>';
 
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.textContent = text;
+   const bubble = document.createElement('div');
+bubble.className = 'bubble';
+bubble.textContent = text;
 
-    msg.appendChild(avatar);
-    msg.appendChild(bubble);
-    thread.appendChild(msg);
-    scrollToBottom();
+msg.appendChild(avatar);
+msg.appendChild(bubble);
+
+if (role === 'assistant') {
+
+  const copyBtn = document.createElement('button');
+
+  copyBtn.className = 'response-copy-btn';
+  copyBtn.type = 'button';
+  copyBtn.textContent = 'Copy';
+
+  copyBtn.addEventListener('click', async () => {
+
+    try {
+      await navigator.clipboard.writeText(
+        bubble.dataset.rawText || bubble.textContent
+      );
+
+      copyBtn.textContent = 'Copied!';
+
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy';
+      }, 1500);
+
+    } catch (error) {
+      console.error('Copy failed:', error);
+
+      copyBtn.textContent = 'Failed';
+
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy';
+      }, 1500);
+    }
+
+  });
+
+  msg.appendChild(copyBtn);
+}
+
+thread.appendChild(msg);
     return bubble;
   }
 
@@ -547,24 +668,56 @@
   // assistant's reply text.
   // ---------------------------------------------------------
   function renderMarkdown(text) {
-  // Escape HTML first for safety
-  let html = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+  const rawHtml = marked.parse(text);
+  return DOMPurify.sanitize(rawHtml);
+}
+  function addCodeCopyButtons(bubble) {
 
-  // Bold: **text**
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  bubble.querySelectorAll('pre').forEach(pre => {
 
-  // Italic: *text*
-  html = html.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+    // Don't add the button twice
+    if (pre.querySelector('.code-copy-btn')) return;
 
-  // Inline code: `code`
-  html = html.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    const code = pre.querySelector('code');
 
-  return html;
+    if (!code) return;
+
+    const button = document.createElement('button');
+
+    button.className = 'code-copy-btn';
+    button.type = 'button';
+    button.textContent = 'Copy';
+
+    button.addEventListener('click', async () => {
+
+      try {
+
+        await navigator.clipboard.writeText(code.textContent);
+
+        button.textContent = 'Copied!';
+
+        setTimeout(() => {
+          button.textContent = 'Copy';
+        }, 1500);
+
+      } catch (error) {
+
+        console.error('Copy failed:', error);
+
+        button.textContent = 'Failed';
+
+        setTimeout(() => {
+          button.textContent = 'Copy';
+        }, 1500);
+
+      }
+
+    });
+
+    pre.appendChild(button);
+
+  });
+
 }
   async function getAIResponse(userText, onChunk) {
   const response = await fetch("https://chat-bot-kyap.onrender.com/api/chat", {
@@ -651,9 +804,10 @@ form.addEventListener('submit', async (e) => {
         assistantBubble = addMessage('assistant', '');
       }
 
-      // Update the same bubble
-      assistantBubble.innerHTML = renderMarkdown(partialText);
+     assistantBubble.dataset.rawText = partialText;
+     assistantBubble.innerHTML = renderMarkdown(partialText);
 
+     addCodeCopyButtons(assistantBubble);
       // Keep latest text visible
       scrollToBottom();
     });
