@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
 from openai import OpenAI
 import os
@@ -13,29 +13,35 @@ client = OpenAI(
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
+    data = request.get_json() or {}
     user_text = data.get("message", "")
 
-    completion = client.chat.completions.create(
-        model="deepseek-ai/deepseek-v4-pro-0813",
-        messages=[
-            {"role": "user", "content": user_text}
-        ],
-        temperature=1,
-        top_p=0.95,
-        max_tokens=2048,
-        seed=42,
-        extra_body={
-            "chat_template_kwargs": {
-                "thinking": False
-            }
-        },
-        stream=False
+    def generate():
+        stream = client.chat.completions.create(
+            model="deepseek-ai/deepseek-v4-pro-0813",
+            messages=[
+                {"role": "user", "content": user_text}
+            ],
+            temperature=1,
+            top_p=0.95,
+            max_tokens=2048,
+            seed=42,
+            extra_body={
+                "chat_template_kwargs": {
+                    "thinking": False
+                }
+            },
+            stream=True
+        )
+
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
+    return Response(
+        stream_with_context(generate()),
+        content_type="text/plain; charset=utf-8"
     )
-
-    reply = completion.choices[0].message.content
-
-    return jsonify({"reply": reply})
 
 
 if __name__ == "__main__":
