@@ -542,34 +542,42 @@
   });
 
   if (!response.ok) {
-    throw new Error("API request failed");
+    throw new Error("API request failed: " + response.status);
   }
 
   if (!response.body) {
-    throw new Error("Streaming is not supported by this browser");
+    throw new Error("No response stream received");
   }
 
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8");
 
   let fullText = "";
 
   while (true) {
-    const { value, done } = await reader.read();
+    const result = await reader.read();
 
-    if (done) {
+    if (result.done) {
       break;
     }
 
-    fullText += decoder.decode(value, { stream: true });
+    const chunk = decoder.decode(result.value, {
+      stream: true
+    });
 
-    onChunk(fullText);
+    if (chunk) {
+      fullText += chunk;
+      onChunk(fullText);
+    }
   }
 
-  // Finish decoding any remaining characters
-  fullText += decoder.decode();
+  // Decode anything remaining
+  const finalChunk = decoder.decode();
 
-  onChunk(fullText);
+  if (finalChunk) {
+    fullText += finalChunk;
+    onChunk(fullText);
+  }
 
   return fullText;
 }
@@ -577,47 +585,56 @@ form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const text = field.value.trim();
+
   if (!text) return;
 
-  // Add user's message
+  // Show user's message
   addMessage('user', text);
 
+  // Clear input
   field.value = '';
   field.style.height = 'auto';
+
+  // Disable send button
   sendBtn.disabled = true;
 
-  // Show typing indicator
+  // Show typing animation
   addTypingIndicator();
 
   let assistantBubble = null;
 
   try {
-    await getAIResponse(text, (partialText) => {
+    await getAIResponse(text, function(partialText) {
 
-      // Create the assistant bubble when the first text arrives
+      // Ignore empty chunks
+      if (!partialText) return;
+
+      // Create ONE assistant bubble
       if (!assistantBubble) {
         removeTypingIndicator();
-
-        // IMPORTANT: addMessage() already returns the bubble
         assistantBubble = addMessage('assistant', '');
       }
 
-      // Put the streamed text into the bubble
+      // Update the same bubble
       assistantBubble.textContent = partialText;
 
-      // Scroll the chat to the newest text
+      // Keep latest text visible
       scrollToBottom();
     });
 
-  } catch (err) {
-    console.error('AI Error:', err);
+  } catch (error) {
+
+    console.error('AI ERROR:', error);
 
     removeTypingIndicator();
 
-    if (!assistantBubble) {
+    if (assistantBubble) {
+      assistantBubble.textContent =
+        "Sorry, I couldn't get a response from the AI.";
+    } else {
       addMessage(
         'assistant',
-        'Something went wrong reaching the AI. Please try again.'
+        "Something went wrong reaching the AI. Please try again."
       );
     }
 
