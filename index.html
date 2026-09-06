@@ -579,14 +579,14 @@ form.addEventListener('submit', async (e) => {
   const text = field.value.trim();
   if (!text) return;
 
-  // Add the user's message
+  // Add user's message
   addMessage('user', text);
 
   field.value = '';
   field.style.height = 'auto';
   sendBtn.disabled = true;
 
-  // Show typing indicator while waiting for the first chunk
+  // Show typing indicator
   addTypingIndicator();
 
   let assistantBubble = null;
@@ -594,43 +594,30 @@ form.addEventListener('submit', async (e) => {
   try {
     await getAIResponse(text, (partialText) => {
 
-      // First chunk has arrived
+      // Create the assistant bubble when the first text arrives
       if (!assistantBubble) {
         removeTypingIndicator();
 
-        // Create an empty assistant message
-        addMessage('assistant', '');
-
-        // Get the last assistant bubble
-        const messages = document.querySelectorAll('.message.assistant');
-        const lastMessage = messages[messages.length - 1];
-
-        if (lastMessage) {
-          assistantBubble = lastMessage.querySelector('.bubble');
-        }
+        // IMPORTANT: addMessage() already returns the bubble
+        assistantBubble = addMessage('assistant', '');
       }
 
-      // Update the assistant message as text arrives
-      if (assistantBubble) {
-        assistantBubble.textContent = partialText;
-      }
+      // Put the streamed text into the bubble
+      assistantBubble.textContent = partialText;
 
-      // Keep the newest text visible
-      window.scrollTo({
-        top: document.body.scrollHeight,
-        behavior: 'smooth'
-      });
+      // Scroll the chat to the newest text
+      scrollToBottom();
     });
 
   } catch (err) {
-    console.error(err);
+    console.error('AI Error:', err);
 
     removeTypingIndicator();
 
     if (!assistantBubble) {
       addMessage(
         'assistant',
-        "Something went wrong reaching the AI. Please try again."
+        'Something went wrong reaching the AI. Please try again.'
       );
     }
 
@@ -639,7 +626,6 @@ form.addEventListener('submit', async (e) => {
     field.focus();
   }
 });
-  
 })();
 </script>
 
